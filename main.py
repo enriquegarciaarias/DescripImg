@@ -29,10 +29,23 @@ def mainProcess():
     processControl.process['modelName'] = "ViT-L/14"
     processControl.process['pretrainedDataset'] = "laion2b_s32b_b82k"
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     log_("info", logger, f"procesing: {processControl.args.proc}, MODEL: {processControl.args.model}")
     processControl.defaults['device'] = "cuda" if torch.cuda.is_available() else "cpu"
     log_("info", logger, f"Using device: {processControl.defaults['device']}")
+
+    if processControl.defaults['device'] == "cuda":
+        os.environ["RANK"] = "0"
+        os.environ["WORLD_SIZE"] = "1"
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12345"
+
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        torch.cuda.set_per_process_memory_fraction(0.98, device=0)
+        torch.backends.cuda.max_split_size_mb = 64
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 
     # MODEL mode: Extract features, train the model, and save it
     if processControl.args.proc == "MODEL":
@@ -78,28 +91,5 @@ if __name__ == '__main__':
 
     log_("info", logger, "********** STARTING Main Image Caption Process **********")
     getConfigs()
-    log_("info", logger, f"System Name: {processControl.env['systemName']}")
-    if processControl.env['systemName'] == "tesla.informatica.uned.es":
-        import torch.distributed as dist
-        dist.init_process_group(backend='nccl')
-        log_("info", logger, "This is TESLA")
-        mainProcess()
-        dist.destroy_process_group()
-    elif processControl.env['systemName'] == "PULSAR-PRO":
-        log_("info", logger, "This is PULSAR-PRO")
-        os.environ["RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "12345"
-
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        torch.cuda.set_per_process_memory_fraction(0.98, device=0)
-        torch.backends.cuda.max_split_size_mb = 64
-        mainProcess()
-
-    else:
-        log_("info", logger, "This is Local")
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-        mainProcess()
-
+    mainProcess()
     log_("info", logger, "********** PROCESS COMPLETED **********")
