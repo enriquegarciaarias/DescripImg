@@ -13,7 +13,8 @@
         "smoteFeatures": 1,
         "imageClasses": ["Panorámica", "Dibujos", "Detalles", "Diapositivas"],
         "token": "",
-        "device": "cpu"
+        "device": "cpu",
+        "cuda": ""
     },
     "models": {
         "VIT": {
