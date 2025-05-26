@@ -1,0 +1,10 @@
+# Python
+__pycache__
+Process.txt
+ProcessLog.txt
+models/*
+descripimg_env
+descripimg_env/*
+.pycache
+process/output/*
+config.json
