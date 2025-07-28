@@ -66,13 +66,16 @@ def load_image(image_file):
     return image
 
 
-def load_images(image_files):
+def OLDload_images(image_files):
     out = []
     for image_file in image_files:
         image = load_image(image_file)
         out.append(image)
     return out
 
+def load_images(image_paths):
+    images = [Image.open(path).resize((224, 224)) for path in image_paths]  # Resize to 224x224
+    return images
 
 
 def buildImageProcess(DirectoryPath=None):

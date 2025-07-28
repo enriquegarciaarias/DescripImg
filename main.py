@@ -32,6 +32,14 @@ def mainProcess():
 
     log_("info", logger, f"procesing: {processControl.args.proc}, MODEL: {processControl.args.model}")
     processControl.defaults['device'] = "cuda" if torch.cuda.is_available() else "cpu"
+
+    processControl.defaults['device'] = "cpu"
+    """
+    On CPU: 
+    export BNB_CUDA_VERSION=124
+    export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+    python3.10 main.py
+    """
     log_("info", logger, f"Using device: {processControl.defaults['device']}")
 
     if processControl.defaults['device'] == "cuda":
@@ -41,7 +49,7 @@ def mainProcess():
         os.environ["MASTER_PORT"] = "12345"
 
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        torch.cuda.set_per_process_memory_fraction(0.98, device=0)
+        torch.cuda.set_per_process_memory_fraction(0.90, device=0)
         torch.backends.cuda.max_split_size_mb = 64
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
