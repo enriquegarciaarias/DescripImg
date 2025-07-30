@@ -119,7 +119,7 @@ def NEWeval_model_batch(args_list, commonArgs):
         commonArgs["model_path"], commonArgs["model_base"], model_name
     )
     device = model.device
-
+    prompt = ""
     for args in args_list:
         qs = args["query"]
         image_path = args["image_file"]
@@ -387,25 +387,46 @@ def processPrompt2(data):
 
 
         if element['context'] is not None:
-            prompt2 = (f"utiliza ahora con prioridad este CONTEXTO: {element['context']}', "
-                        f"'para mejorar la descripción inicial: '{descripInicial}'. "
-                        f"Limita las respuestas a 50 palabras como máximo, pero si alcanzas ese límite a mitad de frase, "
-                        f"puedes extenderte hasta completarla (hasta el punto final). Evita subjetividades y suposiciones. ")
-        else:
-            prompt2 += (f"Manteniendo el texto de la descripción inicial: '{descripInicial}'. "         
-                        f"Utiliza un máximo de 20 palabras sin cortar frases. ")
+            prompt2 = (f"Este es el contexto con el que vamos a enriquecer una descripción de imagen CONTEXTO: '{element['context']}', "
+                        f"mejora la redacción componiendo un texto contínuo y con sentido global "
+                        f"Limita las respuestas a 40 palabras como máximo, pero si alcanzas ese límite a mitad de frase, "
+                        f"puedes extenderte hasta completarla (hasta el punto final). Utiliza solo la información del CONTEXTO sin añadir nada más. ")
+            args = {
+                "query": prompt2,
+                "image_file": element["imagePath"],
+            }
+            processArgs.append(args)
+    return processArgs
 
-        prompt2 += f"Construye un texto enlazado y no menciones evidencias para un arqueólogo como que es antiguo o deteriorado o es un yacimiento"
+def processPrompt3(data):
+    processArgs = []
+    log_("info", logger, f"Start process LLaVA")
+    for element in data:
+        patron = r'Item\s*[12]:?'  # Coincide con "Item 1", "Item 1:", "Item 2", "Item 2:"
+        descripInicial = re.sub(patron, '', element['answer']).strip()
+        patron = r'\*\*.*?\*\*'
+        descripInicial = re.sub(patron, '', descripInicial).strip()
+
+
+        if element['context'] is not None:
+            prompt3 = (f"Tienes el siguiente CONTEXTO de un yacimiento:: '{element['answer2']}', "
+                        f"mejora esta DESCRIPCIÓN: '{descripInicial}'. "
+                        f"Sustituye esta descripción por un texto claro, directo y enlazado, incorporando la información relevante del CONTEXTO. ")
+        else:
+            prompt3 += (f"Manteniendo el texto de la descripción inicial: '{descripInicial}'. "         
+                        f"Utiliza un máximo de 20 palabras sin cortar frases. "
+                        f"Construye un texto enlazado y no menciones evidencias para un arqueólogo como que es antiguo o deteriorado o es un yacimiento")
+
 
         args = {
-            "query": prompt2,
+            "query": prompt3,
             "image_file": element["imagePath"],
         }
         processArgs.append(args)
     return processArgs
 
 
-def processPrompt3(data):
+def processPrompt4(data):
     processArgs = []
     log_("info", logger, f"Start process LLaVA")
     for element in data:
@@ -428,6 +449,9 @@ def processPrompt3(data):
 
 
 def checkStage():
+    data = readResults(3)
+    if data:
+        return 3, data
     data = readResults(2)
     if data:
         return 2, data
@@ -483,7 +507,6 @@ def processStage0(stage):
     return True
 
 
-
 def processStage1(data, stage):
     start_time = time.time()
     commonArgs, metas, personalization = commonVars()
@@ -493,8 +516,7 @@ def processStage1(data, stage):
         for idx2, result in enumerate(results):
             if image_data["imagePath"] == result["image"]:
                 data[idx]["prompt2"] = result["prompt"]
-                data[idx][
-                    "answer2"] = f"{data[idx]['name']}, pertenece al yacimiento de {data[idx]['yacimiento']} en zona de {data[idx]['zona']}. {result['answer']}"
+                data[idx]["answer2"] = result['answer']
 
     stage += 1
     result = sorted(data, key=lambda x: (x['label'] is None, x['label']))
@@ -505,6 +527,28 @@ def processStage1(data, stage):
     return True
 
 
+
+def processStage2(data, stage):
+    start_time = time.time()
+    commonArgs, metas, personalization = commonVars()
+    processArgs = processPrompt3(data)
+    results = eval_model_batch(processArgs, commonArgs)
+    for idx, image_data in enumerate(data):
+        for idx2, result in enumerate(results):
+            if image_data["imagePath"] == result["image"]:
+                data[idx]["prompt3"] = result["prompt"]
+                data[idx]["answer3"] = \
+                    f"{data[idx]['name']}, pertenece al yacimiento de {data[idx]['yacimiento']} en zona de {data[idx]['zona']}. {result['answer']}"
+
+    stage += 1
+    result = sorted(data, key=lambda x: (x['label'] is None, x['label']))
+    writeResultsData(result, stage)
+    end_time = time.time()  # End timing
+    duration = end_time - start_time
+    log_("info", logger, f"Duration Process 2: {duration}")
+    return True
+
+
 def processLLaVA():
     if processControl.defaults['device'] == "cuda":
         torch.cuda.empty_cache()
@@ -512,6 +556,8 @@ def processLLaVA():
     stage, data = checkStage()
     log_("info", logger, f"Stage: {stage}")
     result = False
+    if stage == 2:
+        result = processStage2(data, stage)
     if stage == 1:
         result = processStage1(data, stage)
     elif stage == 0:
