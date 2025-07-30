@@ -1,10 +1,22 @@
-# Python
-__pycache__
+# Bytecode cache
+__pycache__/
+.pycache/
+
+# Output and log files
 Process.txt
 ProcessLog.txt
+
+# Ignore everything in models/ except the folder
 models/*
-descripimg_env
+!models/
+
+# Ignore environment folder
+descripimg_env/
 descripimg_env/*
-.pycache
+
+# Ignore everything in process/output/ except the folder
 process/output/*
+!process/output/
+
+# Config (optional: include this only if config.json is user-specific or secret)
 config.json
