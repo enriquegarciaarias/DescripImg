@@ -87,7 +87,11 @@ def convert_docx_to_txt(input_path, output_path=None):
 
 def asignarToposSpacy(bloques, topos2):
     for bloque in bloques:
-        bloque['topoSpacy'] = [topo for topo in topos2 if topo in bloque['text']]
+        texto_sin_acentos = unidecode(bloque['text']).lower()  # Normaliza y pasa a minúsculas
+        bloque['topoSpacy'] = [
+            topo for topo in topos2
+            if unidecode(topo).lower() in texto_sin_acentos
+        ]
     return bloques
 
 
@@ -119,11 +123,11 @@ def buildContextData(documentContextpath, title, top_n=3, threshold=0.5):
         if bloque['text'] not in textosUsados:
             for elemento in keywords:
                 peso = len(elemento.split())
-                cleanWord = unidecode(word)
-                if cleanWord in bloque.get('toponimos', []):
+
+                if elemento in bloque.get('toponimos', []):
                     contexto.setdefault(peso, []).append(bloque['text'])
                     textosUsados.append(bloque['text'])
-                elif cleanWord in bloque.get('topoSpacy', []):
+                elif elemento in bloque.get('topoSpacy', []):
                     contexto.setdefault(peso, []).append(bloque['text'])
                     textosUsados.append(bloque['text'])
 
