@@ -1,6 +1,9 @@
 """
-@Purpose: Main script for initializing environment settings and start procesing the Image Captioning project, handling main modes:
-@Usage: Run `python mainProcess.py`.
+:Description: Módulo principal de ejecución de los procesos de generación de Descripciones de Imágenes
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
 """
 
 from sources.common.common import processControl, logger, log_
@@ -72,7 +75,6 @@ def mainProcess():
         elif processControl.args.model == "LLaVA":
             from sources.processLLaVA import processLLaVA
             processLLaVA()
-
 
     if processControl.args.proc == "EVAL":
         from sources.evaluacion import procesoEvaluacion
