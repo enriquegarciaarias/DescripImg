@@ -22,8 +22,104 @@ import torch
 from llava.model import *
 from llava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
+def load_pretrained_model(
+    model_path,
+    model_base,
+    model_name,
+    device="cuda",
+    device_map="auto",
+    use_flash_attn=False,
+):
+    kwargs = {}
 
-def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda", use_flash_attn=False, **kwargs):
+    # ============================
+    # DEVICE & DTYPE POLICY (SAFE)
+    # ============================
+    use_cuda = (device == "cuda" and torch.cuda.is_available())
+
+    if use_cuda:
+        # ⚠️ IMPORTANTE:
+        # El dtype REAL del modelo lo controla bitsandbytes + autocast
+        # NO se debe forzar luego con model.to(dtype=...)
+        kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        )
+        kwargs["device_map"] = device_map
+        kwargs["torch_dtype"] = torch.float16
+    else:
+        # CPU: sin cuantización
+        kwargs["device_map"] = {"": "cpu"}
+        kwargs["torch_dtype"] = torch.float32
+
+    if use_flash_attn and use_cuda:
+        kwargs["attn_implementation"] = "flash_attention_2"
+
+    # ============================
+    # LOAD MODEL (SAFE)
+    # ============================
+    if "llava" in model_name.lower():
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=False
+        )
+
+        model = LlavaLlamaForCausalLM.from_pretrained(
+            model_path,
+            low_cpu_mem_usage=True,
+            **kwargs
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=False
+        )
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            low_cpu_mem_usage=True,
+            **kwargs
+        )
+
+    model.eval()
+
+    # ============================
+    # VISION TOWER (CRÍTICO)
+    # ============================
+    image_processor = None
+
+    if "llava" in model_name.lower():
+        vision_tower = model.get_vision_tower()
+
+        if not vision_tower.is_loaded:
+            # ⚠️ NO forzar dtype aquí
+            vision_tower.load_model(device_map=device_map)
+
+        # ⚠️ NO hacer .to(dtype=...)
+        # bitsandbytes + autocast se encargan
+        if use_cuda:
+            vision_tower.to(device=model.device)
+        else:
+            vision_tower.to(device="cpu")
+
+        image_processor = vision_tower.image_processor
+
+    # ============================
+    # CONTEXT LENGTH
+    # ============================
+    context_len = getattr(
+        model.config,
+        "max_sequence_length",
+        getattr(model.config, "max_position_embeddings", 2048)
+    )
+
+    return tokenizer, model, image_processor, context_len
+
+
+
+def OLDload_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda", use_flash_attn=False, **kwargs):
     kwargs = {"device_map": device_map, **kwargs}
 
     # EGA Force to load in 4Bit

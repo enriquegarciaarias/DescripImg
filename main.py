@@ -10,8 +10,8 @@ from sources.common.common import processControl, logger, log_
 from sources.common.utils import huggingface_login
 from sources.common.paramsManager import getConfigs
 
-import torch
-import os
+
+
 
 
 def mainProcess():
@@ -33,10 +33,9 @@ def mainProcess():
     processControl.process['pretrainedDataset'] = "laion2b_s32b_b82k"
 
 
-    log_("info", logger, f"procesing: {processControl.args.proc}, MODEL: {processControl.args.model}")
-    processControl.defaults['device'] = "cuda" if torch.cuda.is_available() else "cpu"
+    log_("info", logger, f"processing: {processControl.args.proc}, MODEL: {processControl.args.model}")
 
-    processControl.defaults['device'] = "cpu"
+
     """
     On CPU: 
     export BNB_CUDA_VERSION=124
@@ -44,16 +43,16 @@ def mainProcess():
     python3.10 main.py
     """
     log_("info", logger, f"Using device: {processControl.defaults['device']}")
-
+    import os
     if processControl.defaults['device'] == "cuda":
-        os.environ["RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "12345"
 
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-        torch.cuda.set_per_process_memory_fraction(0.90, device=0)
-        torch.backends.cuda.max_split_size_mb = 64
+
+        import torch
+        torch.cuda.empty_cache()
+        processControl.defaults['device'] = "cuda" if torch.cuda.is_available() else "cpu"
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 

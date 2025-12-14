@@ -18,8 +18,10 @@ def manageArgs():
     @Desc: Parse command-line arguments to configure the process.
     @Result: Returns parsed arguments as a Namespace object.
     """
-    parser = argparse.ArgumentParser(description="Main process for Corpus handling.")
+    parser = argparse.ArgumentParser(description="Main process for Image Description.")
     parser.add_argument('--proc', type=str, help="Process type: MODEL, APPLY", default="APPLY")
+    parser.add_argument('--yacimiento', type=str, help="Process type: MODEL, APPLY", default="RAMNOUS")
+    parser.add_argument('--region', type=str, help="Process type: MODEL, APPLY", default="ÁTICA")
     args = parser.parse_args()
 
     # Establecer valores por defecto internos
@@ -45,22 +47,17 @@ def manageEnv():
         else:
             env_data[key] = os.path.join(environment["realPath"], value)
 
-
     os.makedirs(env_data['.pycache'], exist_ok=True)
     os.environ['PYTHONPYCACHEPREFIX'] = env_data['.pycache']
     sys.pycache_prefix = env_data['.pycache']
     env_data['systemName'] = socket.getfqdn()
+    env_data['modelsCFG'] = config.get_models()
     return env_data
 
 def manageDefaults():
     config = configLoader()
     environment = config.get_defaults()
     return environment
-
-def manageModels():
-    config = configLoader()
-    models = config.get_models()
-    return models
 
 def getConfigs():
     """
@@ -70,7 +67,8 @@ def getConfigs():
 
     processControl.env = manageEnv()
     processControl.args = manageArgs()
-    processControl.models = manageModels()
     processControl.defaults = manageDefaults()
+
+
 
 

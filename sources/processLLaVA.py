@@ -1,12 +1,19 @@
+"""
+:Description: Ejecución de procesos de modelización basado en LLaVA
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common.common import logger, processControl, log_
 from sources.contextData import buildContextData
-from sources.common.utils import image_parser, load_images
+from sources.common.utils import image_parser, load_images, commonVars, get_model_name_from_path
 from sources.processFeatures import extractFeatures, assign_to_cluster
 from sources.dataManager import readResults, writeResultsData
+from sources.modelEvaluate import eval_model_batch
 import os
 import time
-import json
-import numpy as np
+
 
 import torch
 from tqdm import tqdm
@@ -24,7 +31,6 @@ from llava.utils import disable_torch_init
 from llava.mm_utils import (
     process_images,
     tokenizer_image_token,
-    get_model_name_from_path,
 )
 
 import re
@@ -154,127 +160,7 @@ def NEWeval_model_batch(args_list, commonArgs):
     return results
 
 
-def eval_model_batch(args_list, commonArgs):
-    disable_torch_init()
-    results = []
 
-    # Load model and tokenizer once
-    model_name = get_model_name_from_path(commonArgs["model_path"])
-    log_("info", logger, f"Evaluating {commonArgs['model_path']}")
-    if processControl.defaults['device'] == "cpu":
-        tokenizer, model, image_processor, context_len = load_pretrained_model(
-            commonArgs["model_path"],
-            commonArgs["model_base"],
-            model_name,
-            load_in_8bit=False,  # Disable 8-bit quantization
-            load_in_4bit=False,  # Disable 4-bit quantization
-            device_map="cpu", # Explicitly map to CPU
-            device="cpu"
-        )
-
-    elif processControl.defaults['device'] == "cuda":
-        tokenizer, model, image_processor, context_len = load_pretrained_model(
-            commonArgs["model_path"],
-            commonArgs["model_base"],
-            model_name,
-            load_8bit=False,
-            load_4bit=True,
-            device_map="auto",
-            device="cuda",
-        )
-
-    device = model.device
-    log_("info", logger, f"Using device: {device}")
-    batch_input_ids = []
-    batch_images = []
-    batch_image_sizes = []
-    batch_prompts = []
-    batch_metadata = []
-
-    for args in args_list:
-        qs = args["query"]
-        image_path = args["image_file"]
-
-        # Process prompt
-        image_token_se = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
-        if IMAGE_PLACEHOLDER in qs:
-            if model.config.mm_use_im_start_end:
-                qs = re.sub(IMAGE_PLACEHOLDER, image_token_se, qs)
-            else:
-                qs = re.sub(IMAGE_PLACEHOLDER, DEFAULT_IMAGE_TOKEN, qs)
-        else:
-            if model.config.mm_use_im_start_end:
-                qs = image_token_se + "\n" + qs
-            else:
-                qs = DEFAULT_IMAGE_TOKEN + "\n" + qs
-
-        # Conversation mode selection
-        if "llama-2" in model_name.lower():
-            conv_mode = "llava_llama_2"
-        elif "mistral" in model_name.lower():
-            conv_mode = "mistral_instruct"
-        elif "v1.6-34b" in model_name.lower():
-            conv_mode = "chatml_direct"
-        elif "v1" in model_name.lower():
-            conv_mode = "llava_v1"
-        elif "mpt" in model_name.lower():
-            conv_mode = "mpt"
-        else:
-            conv_mode = "llava_v0"
-
-        args["conv_mode"] = conv_mode
-
-        conv = conv_templates[conv_mode].copy()
-        conv.append_message(conv.roles[0], qs)
-        conv.append_message(conv.roles[1], None)
-        prompt = conv.get_prompt()
-
-        # Process image
-        images = load_images([image_path])  # Load as list
-        image_sizes = [x.size for x in images]
-        images_tensor = process_images(
-            images,
-            image_processor,
-            model.config
-        ).to(device, dtype=torch.float16)
-
-        # Tokenize input
-        input_ids = (
-            tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
-            .unsqueeze(0)
-            .to(device)
-        )
-
-        batch_input_ids.append(input_ids)
-        batch_images.append(images_tensor)
-        batch_image_sizes.append(image_sizes)
-        batch_prompts.append(prompt)
-        batch_metadata.append(args)
-
-    # Process each image-prompt pair sequentially (if memory is limited)
-    for i in tqdm(range(len(batch_input_ids)), desc="Processing Batches", unit="batch"):
-        with torch.inference_mode():
-            output_ids = model.generate(
-                batch_input_ids[i],
-                images=batch_images[i],
-                image_sizes=batch_image_sizes[i],
-                do_sample=True if commonArgs["temperature"] > 0 else False,
-                temperature=commonArgs["temperature"],
-                top_p=commonArgs["top_p"],
-                num_beams=commonArgs["num_beams"],
-                max_new_tokens=commonArgs["max_new_tokens"],
-                use_cache=False,
-            )
-        torch.cuda.empty_cache()
-        output_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-
-        results.append({
-            "image": batch_metadata[i]["image_file"],
-            "prompt": batch_metadata[i]["query"],
-            "answer": output_text
-        })
-
-    return results
 
 
 def buildContentProcess():
@@ -305,8 +191,8 @@ def buildContentProcess():
                 "image": title,
                 "imagePath": file_path,
                 "name": name,
-                "yacimiento": "RAMNOUS",
-                "zona": "ÁTICA"
+                "yacimiento": processControl.args.yacimiento,
+                "zona": processControl.args.region,
             })
 
         # Si es un archivo .doc o .docx (tomamos el primero que encontremos)
@@ -317,47 +203,9 @@ def buildContentProcess():
     return {"images":images_list, "doc":doc_file}
 
 
-def commonVars():
-    model_path = "liuhaotian/llava-v1.5-7b"
-    commonArgs = {
-        "model_path": model_path,
-        "model_base": None,
-        "model_name": get_model_name_from_path(model_path),
-        "conv_mode": None,
-        "sep": ",",
-        "temperature": 0.2,  # 0
-        "top_p": None,
-        "num_beams": 3,  # 1
-        "max_new_tokens": 128  # 512, 256
-    }
-    metas = {
-        "yacimiento": "RAMNOUS",
-        "region": "ÁTICA"
-    }
-    personalization = {
-        "Panorámica": ["Para esta fotografía panorámica",
-                       "**Ubicación y entorno**: Describe el paisaje y el tipo de terreno",
-                       "**Elemento principal yacimiento arqueológico**: Explica la estructura, y su disposición",
-                       "es un yacimiento arqueológico en su vista general y amplia no son sólo piedras"],
-        "Dibujos": ["Para este dibujo que muestra con detalle un elemento o una estructura",
-                    "**Composición y contorno**: Describe su estructura, composición, apariencia",
-                    "**Elemento principal**: Explica qué simboliza o representa culturalmente",
-                    "es la representación de una estructura arqueológica singular y que puede estar incompleta"],
-        "Detalles": ["Para esta fotografía que enfoca un detalle",
-                     "**Ubicación y entorno**: Describe el entorno y cómo se ubica el elemento principal",
-                     "**Elemento principal que protagoniza la imagen**: Explica la estuctura de el elemento principal",
-                     "es un yacimiento arqueológico con su elemento principal no son sólo piedras"],
-        "Diapositivas": ["Para esta fotografía de exposición",
-                         "**Composición**: Describe su composición y contorno",
-                         "**Elemento principal**: Explica sus características",
-                         "es un objeto arqueológico de valor singular"]
-    }
-    return commonArgs, metas, personalization
-
-
 def processPrompt1(contentProcess, imageFeatures, personalization):
     processArgs = []
-    for content in contentProcess["images"]:
+    for content in tqdm(contentProcess["images"], desc="Processing Prompt 1"):
         features = imageFeatures[content['name']]
         assigned_label, closest_cluster_idx = assign_to_cluster(features)
         contextText, keywords = buildContextData(contentProcess["doc"], content["name"], top_n=5)
@@ -384,7 +232,6 @@ def processPrompt2(data):
         descripInicial = re.sub(patron, '', element['answer']).strip()
         patron = r'\*\*.*?\*\*'
         descripInicial = re.sub(patron, '', descripInicial).strip()
-
 
         if element['context'] is not None:
             prompt2 = (f"Este es el contexto con el que vamos a enriquecer una descripción de imagen CONTEXTO: '{element['context']}', "
@@ -461,14 +308,14 @@ def checkStage():
     return 0, None
 
 
-def processStage0(stage):
+def processStage0():
     commonArgs, metas, personalization = commonVars()
     start_time = time.time()
     contentProcess = buildContentProcess()
-    imageFeatures = extractFeatures(contentProcess["images"], processControl.args.featuresmodel)
+    imageFeatures = extractFeatures(contentProcess["images"])
     doc = contentProcess["doc"]
-    for index, content in enumerate(contentProcess["images"]):
-        log_('info', logger, f'processing image {content["name"]}')
+    for index, content in enumerate(tqdm(contentProcess["images"], desc="Procesando imágenes")):
+        #log_('info', logger, f'processing image {content["name"]}')
         contextText, keywords = buildContextData(doc, content["name"], top_n=5)
         contentProcess["images"][index]["context"] = contextText
         contentProcess["images"][index]["keywords"] = keywords
@@ -484,7 +331,7 @@ def processStage0(stage):
 
     processArgs = processPrompt1(contentProcess, imageFeatures, personalization)
     results = eval_model_batch(processArgs, commonArgs)
-    for idx, image_data in enumerate(contentProcess["images"]):
+    for idx, image_data in enumerate(tqdm(contentProcess["images"], desc="Procesando resultados paso 1")):
         for idx2, result in enumerate(results):
             if image_data["imagePath"] == result["image"]:
                 contentProcess["images"][idx]["prompt"] = result["prompt"]
@@ -495,19 +342,18 @@ def processStage0(stage):
                 descripInicial = re.sub(patron, '', descripInicial).strip()
                 contentProcess["images"][idx]["answer"] = descripInicial
 
-    stage += 1
 
     result = sorted(contentProcess['images'], key=lambda x: (x['label'] is None, x['label']))
-    writeResultsData(result, stage)
+    writeResultsData(result, 1)
 
     end_time2 = time.time()  # End timing
     duration = end_time2 - end_time
-    log_("info", logger, f"Duration Process 2: {duration}")
+    log_("info", logger, f"Duration Process 0: {duration}")
 
-    return True
+    return result
 
 
-def processStage1(data, stage):
+def processStage1(data):
     start_time = time.time()
     commonArgs, metas, personalization = commonVars()
     processArgs = processPrompt2(data)
@@ -518,17 +364,16 @@ def processStage1(data, stage):
                 data[idx]["prompt2"] = result["prompt"]
                 data[idx]["answer2"] = result['answer']
 
-    stage += 1
+
     result = sorted(data, key=lambda x: (x['label'] is None, x['label']))
-    writeResultsData(result, stage)
+    writeResultsData(result, 2)
     end_time = time.time()  # End timing
     duration = end_time - start_time
     log_("info", logger, f"Duration Process 1: {duration}")
-    return True
+    return result
 
 
-
-def processStage2(data, stage):
+def processStage2(data):
     start_time = time.time()
     commonArgs, metas, personalization = commonVars()
     processArgs = processPrompt3(data)
@@ -540,13 +385,13 @@ def processStage2(data, stage):
                 data[idx]["answer3"] = \
                     f"{data[idx]['name']}, pertenece al yacimiento de {data[idx]['yacimiento']} en zona de {data[idx]['zona']}. {result['answer']}"
 
-    stage += 1
+
     result = sorted(data, key=lambda x: (x['label'] is None, x['label']))
-    writeResultsData(result, stage)
+    writeResultsData(result, 3)
     end_time = time.time()  # End timing
     duration = end_time - start_time
     log_("info", logger, f"Duration Process 2: {duration}")
-    return True
+    return result
 
 
 def processLLaVA():
@@ -555,13 +400,21 @@ def processLLaVA():
         torch.cuda.reset_max_memory_allocated()
     stage, data = checkStage()
     log_("info", logger, f"Stage: {stage}")
-    result = False
+    data = processStage0()
+    log_("info", logger, f"Proceso Fase: 1")
+    data = processStage1(data)
+    log_("info", logger, f"Proceso Fase: 2")
+    data = processStage2(data)
+    return
+
+
+
     if stage == 2:
-        result = processStage2(data, stage)
+        result = processStage2(data)
     if stage == 1:
-        result = processStage1(data, stage)
+        result = processStage1(data)
     elif stage == 0:
-        result = processStage0(stage)
-    return result
+        result = processStage0()
+
 
 

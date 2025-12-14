@@ -11,9 +11,7 @@ import re
 #nlp = spacy.load("en_core_web_sm")  # Para segmentar párrafos con más precisión Inglés
 nlp = spacy.load("es_core_news_lg") # Para segmentar párrafos con más precisión Castellano
 
-MODEL_NAME_EMBEDDING = "sentence-transformers/all-MiniLM-L6-v2"
-embedding_model = SentenceTransformer(MODEL_NAME_EMBEDDING)
-embedding_model.to("cuda" if torch.cuda.is_available() else "cpu")
+
 
 
 def extract_entity(text):
@@ -149,10 +147,14 @@ def buildContextData(documentContextpath, title, top_n=3, threshold=0.5):
 
     # Unir con ".  " como separador
     texto_final = ".  ".join(resultado)
-    log_("info", logger, f"texto contexto: {texto_final}, keywords: {keywords}")
+    #log_("info", logger, f"texto contexto: {texto_final}, keywords: {keywords}")
 
     return texto_final, keywords
 
+    """
+    MODEL_NAME_EMBEDDING = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model = SentenceTransformer(MODEL_NAME_EMBEDDING)
+    embedding_model.to("cuda" if torch.cuda.is_available() else "cpu")
     # Obtener embeddings de keywords y párrafos
     keyword_embeddings = embedding_model.encode(keywords, convert_to_tensor=True)
     paragraph_embeddings = embedding_model.encode(paragraphs, convert_to_tensor=True)
@@ -188,6 +190,8 @@ def buildContextData(documentContextpath, title, top_n=3, threshold=0.5):
     if check_words and not any(word in contexto for word in check_words):
         return None, keywords
     return contexto, keywords
+    """
+
 
 
 def toponimos(text, prefijos):

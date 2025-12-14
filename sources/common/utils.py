@@ -9,6 +9,15 @@ import requests
 from PIL import Image
 from io import BytesIO
 
+
+def get_model_name_from_path(model_path):
+    model_path = model_path.strip("/")
+    model_paths = model_path.split("/")
+    if model_paths[-1].startswith('checkpoint-'):
+        return model_paths[-2] + "_" + model_paths[-1]
+    else:
+        return model_paths[-1]
+
 def mkdir(dir_path):
     """
     @Desc: Creates directory if it doesn't exist.
@@ -97,4 +106,48 @@ def huggingface_login():
         print("Error logging into Hugging Face:", str(e))
         raise
 
+
+def commonVars():
+    model_path = "liuhaotian/llava-v1.5-7b"
+    commonArgs = {
+        "model_path": model_path,
+        "model_base": None,
+        "model_name": get_model_name_from_path(model_path),
+        "conv_mode": None,
+        "sep": ",",
+        "temperature": 0.2,  # 0
+        "top_p": None,
+        "num_beams": 3,  # 1
+        "max_new_tokens": 128  # 512, 256
+    }
+    metas = {
+        "yacimiento": processControl.args.yacimiento,
+        "region": processControl.args.region,
+    }
+    """
+    metas = {
+        "yacimiento": "RAMNOUS",
+        "region": "ÁTICA"
+    }    
+    """
+
+    personalization = {
+        "Panorámica": ["Para esta fotografía panorámica",
+                       "**Ubicación y entorno**: Describe el paisaje y el tipo de terreno",
+                       "**Elemento principal yacimiento arqueológico**: Explica la estructura, y su disposición",
+                       "es un yacimiento arqueológico en su vista general y amplia no son sólo piedras"],
+        "Dibujos": ["Para este dibujo que muestra con detalle un elemento o una estructura",
+                    "**Composición y contorno**: Describe su estructura, composición, apariencia",
+                    "**Elemento principal**: Explica qué simboliza o representa culturalmente",
+                    "es la representación de una estructura arqueológica singular y que puede estar incompleta"],
+        "Detalles": ["Para esta fotografía que enfoca un detalle",
+                     "**Ubicación y entorno**: Describe el entorno y cómo se ubica el elemento principal",
+                     "**Elemento principal que protagoniza la imagen**: Explica la estuctura de el elemento principal",
+                     "es un yacimiento arqueológico con su elemento principal no son sólo piedras"],
+        "Diapositivas": ["Para esta fotografía de exposición",
+                         "**Composición**: Describe su composición y contorno",
+                         "**Elemento principal**: Explica sus características",
+                         "es un objeto arqueológico de valor singular"]
+    }
+    return commonArgs, metas, personalization
 

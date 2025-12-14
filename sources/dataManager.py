@@ -174,6 +174,8 @@ def writeResultsData(data, stage):
         resultsPath = os.path.join(processControl.env['outputPath'], f"results_{stage}.json")
         with open(resultsPath, 'w') as json_file:
             json.dump(data, json_file, indent=4, ensure_ascii=False, default=convert_to_serializable)
+        log_("info", logger, f"Grabados results {resultsPath}")
+        
     except Exception as e:
         raise Exception(f"Couldn't save results: {e}")
 

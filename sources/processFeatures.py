@@ -19,7 +19,8 @@ bert_model = BertModel.from_pretrained("bert-base-uncased")
 
 # VIT ViT (Vision Transformer) trained on LAION-2B performs better for your archaeology images compared to CLIP
 
-def extractFeatures(imagesList, mode="VIT"):
+def extractFeatures(imagesList):
+    mode = processControl.env.get("modelsCGF", {}).get("featuresModel", "VIT")
     # Cargar la imagen
     image_features = {}
     device = processControl.defaults['device']
@@ -53,9 +54,10 @@ def extractFeatures(imagesList, mode="VIT"):
                 image_features[imagePro['name']] = features
 
         elif mode == "VIT":
+            modeCFG = processControl.env.get("modelsCFG", {}).get(mode, {})
             model, preprocess = loadModelOpenClip(
-                processControl.models['VIT']['modelName'],
-                processControl.models['VIT']['pretrainedDataset']
+                modeCFG.get('modelName', ""),
+                modeCFG.get('pretrainedDataset', "")
             )
             model.to(device)
             for imagePro in tqdm(imagesList, desc="Extracting features"):
@@ -83,7 +85,7 @@ def extractFeaturesForInference(imageFolder):
     :rtype: numpy.ndarray
     """
     imagesList = buildImageProcess(imageFolder)
-    features = extractFeatures(imagesList, processControl.args.featuresmodel)
+    features = extractFeatures(imagesList)
     image_features = []
     for feature in features.values():
         image_features.append(feature)
@@ -230,7 +232,7 @@ def processFeatures():
     imageFeatures = {}
     try:
         imagesList = buildImageProcess(processControl.env['inputPath'])
-        imageFeatures = extractFeatures(imagesList, processControl.args.featuresmodel)
+        imageFeatures = extractFeatures(imagesList)
 
         # Step 2: Optimize the dimensionality of the extracted features using PCA
         imageFeatures2 = optimizeDimensions(imageFeatures)
