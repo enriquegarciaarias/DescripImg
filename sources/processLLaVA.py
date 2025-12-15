@@ -160,9 +160,6 @@ def NEWeval_model_batch(args_list, commonArgs):
     return results
 
 
-
-
-
 def buildContentProcess():
     image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}
     doc_extensions = {".doc", ".docx"}
@@ -214,7 +211,7 @@ def processPrompt1(contentProcess, imageFeatures, personalization):
                    f"Ten en cuenta sin mencionar explícitamente que {personalization[assigned_label][3]} "
                    f"y describe en castellano solo lo visible. Máximo 20 palabras, cíñete a estos dos items:\n"
                    f"Item 1 {personalization[assigned_label][1]}. "
-                   f"Item 2 {personalization[assigned_label][2]}. Máximo 20 palabras, no mencionar deteriorado y/o antiguo.")
+                   f"Item 2 {personalization[assigned_label][2]}. Máximo 20 palabras.")
 
         args = {
             "query": prompt1,
@@ -254,9 +251,8 @@ def processPrompt3(data):
         patron = r'\*\*.*?\*\*'
         descripInicial = re.sub(patron, '', descripInicial).strip()
 
-
         if element['context'] is not None:
-            prompt3 = (f"Tienes el siguiente CONTEXTO de un yacimiento:: '{element['answer2']}', "
+            prompt3 = (f"Tienes el siguiente CONTEXTO de un yacimiento: '{element['answer2']}', "
                         f"mejora esta DESCRIPCIÓN: '{descripInicial}'. "
                         f"Sustituye esta descripción por un texto claro, directo y enlazado, incorporando la información relevante del CONTEXTO. ")
         else:
@@ -309,7 +305,8 @@ def checkStage():
 
 
 def processStage0():
-    commonArgs, metas, personalization = commonVars()
+    commonArgs, metas = commonVars()
+    personalization = processControl.defaults.get('personalization', {})
     start_time = time.time()
     contentProcess = buildContentProcess()
     imageFeatures = extractFeatures(contentProcess["images"])
@@ -355,7 +352,8 @@ def processStage0():
 
 def processStage1(data):
     start_time = time.time()
-    commonArgs, metas, personalization = commonVars()
+    commonArgs, metas = commonVars()
+
     processArgs = processPrompt2(data)
     results = eval_model_batch(processArgs, commonArgs)
     for idx, image_data in enumerate(data):
@@ -375,7 +373,8 @@ def processStage1(data):
 
 def processStage2(data):
     start_time = time.time()
-    commonArgs, metas, personalization = commonVars()
+    commonArgs, metas = commonVars()
+
     processArgs = processPrompt3(data)
     results = eval_model_batch(processArgs, commonArgs)
     for idx, image_data in enumerate(data):
@@ -408,13 +407,10 @@ def processLLaVA():
     return
 
 
-
     if stage == 2:
         result = processStage2(data)
     if stage == 1:
         result = processStage1(data)
     elif stage == 0:
         result = processStage0()
-
-
 

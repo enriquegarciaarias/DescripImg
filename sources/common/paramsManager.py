@@ -1,8 +1,10 @@
 """
-@Purpose: Handles project-wide parameters
-@Usage: Functions called by the main process
+:Description: Controly actualización de los parámetros generales de ejecución
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
 """
-
 import argparse
 import os
 import sys

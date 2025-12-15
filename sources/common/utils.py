@@ -124,12 +124,6 @@ def commonVars():
         "yacimiento": processControl.args.yacimiento,
         "region": processControl.args.region,
     }
-    """
-    metas = {
-        "yacimiento": "RAMNOUS",
-        "region": "ÁTICA"
-    }    
-    """
 
     personalization = {
         "Panorámica": ["Para esta fotografía panorámica",
@@ -149,5 +143,5 @@ def commonVars():
                          "**Elemento principal**: Explica sus características",
                          "es un objeto arqueológico de valor singular"]
     }
-    return commonArgs, metas, personalization
+    return commonArgs, metas
 
