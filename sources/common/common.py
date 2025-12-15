@@ -1,3 +1,10 @@
+"""
+:Description: Módulo de procesos comunes
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common import global_vars
 import logging
 from logging.handlers import RotatingFileHandler

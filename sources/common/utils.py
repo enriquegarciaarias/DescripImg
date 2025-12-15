@@ -1,3 +1,10 @@
+"""
+:Description: Módulo de utilidades generales
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common.common import logger, processControl, log_
 import json
 

@@ -10,10 +10,6 @@ from sources.common.common import processControl, logger, log_
 from sources.common.utils import huggingface_login
 from sources.common.paramsManager import getConfigs
 
-
-
-
-
 def mainProcess():
     """
     Main process for handling either model training or applying a trained model to new data.
@@ -65,15 +61,8 @@ def mainProcess():
     # APPLY mode: Apply the trained model to new data
     if processControl.args.proc == "APPLY":
         huggingface_login()
-        if processControl.args.model == "LLM":
-            from sources.processLLM import processLlama2
-            processLlama2()
-        elif processControl.args.model == "MISTRAL":
-            from sources.processLLM import processMistral
-            processMistral()
-        elif processControl.args.model == "LLaVA":
-            from sources.processLLaVA import processLLaVA
-            processLLaVA()
+        from sources.processLLaVA import processLLaVA
+        processLLaVA()
 
     if processControl.args.proc == "EVAL":
         from sources.evaluacion import procesoEvaluacion

@@ -1,3 +1,10 @@
+"""
+:Description: Módulo gestion de datos externos (lectura, escritura,...)
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common.common import logger, processControl, log_
 
 import torch

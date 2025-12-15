@@ -22,7 +22,112 @@ import torch
 from llava.model import *
 from llava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
+
 def load_pretrained_model(
+        model_path,
+        model_base,
+        model_name,
+        device="cuda",
+        device_map="auto",
+        config=None,  # ← NUEVO: recibe configuración automática
+):
+    """Versión actualizada con configuración adaptativa"""
+
+    if config is None:
+        config = {"use_cuda": (device == "cuda" and torch.cuda.is_available())}
+
+    use_cuda = config.get("use_cuda", False)
+    kwargs = {}
+
+    # ============================
+    # CONFIGURACIÓN ADAPTATIVA
+    # ============================
+    if use_cuda:
+        # Configuración de cuantización basada en la configuración automática
+        if config.get("load_in_4bit", False):
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=config.get("torch_dtype", torch.float16),
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+        elif config.get("load_in_8bit", False):
+            kwargs["load_in_8bit"] = True
+            kwargs["torch_dtype"] = config.get("torch_dtype", torch.float16)
+        else:
+            # Sin cuantización - máxima precisión
+            kwargs["torch_dtype"] = config.get("torch_dtype", torch.float16)
+
+        # Mapa de memoria si se especifica
+        if config.get("max_memory"):
+            kwargs["max_memory"] = config["max_memory"]
+
+        kwargs["device_map"] = device_map
+
+        # Flash Attention si está disponible y configurado
+        if config.get("use_flash_attn", False):
+            try:
+                kwargs["attn_implementation"] = "flash_attention_2"
+            except:
+                pass
+    else:
+        # CPU
+        kwargs["device_map"] = {"": "cpu"}
+        kwargs["torch_dtype"] = torch.float32
+
+    # ============================
+    # CARGA DEL MODELO (IGUAL QUE ANTES)
+    # ============================
+    if "llava" in model_name.lower():
+        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+        model = LlavaLlamaForCausalLM.from_pretrained(
+            model_path,
+            low_cpu_mem_usage=True,
+            **kwargs
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            low_cpu_mem_usage=True,
+            **kwargs
+        )
+
+    model.eval()
+
+    # ============================
+    # VISION TOWER (CON GESTIÓN DE MEMORIA)
+    # ============================
+    image_processor = None
+
+    if "llava" in model_name.lower():
+        vision_tower = model.get_vision_tower()
+
+        if not vision_tower.is_loaded:
+            # Usar device_map específico si hay CPU offload
+            vision_device_map = device_map
+            if config.get("enable_cpu_offload", False):
+                vision_device_map = {"": "cpu" if not use_cuda else model.device}
+
+            vision_tower.load_model(device_map=vision_device_map)
+
+        # Mover a dispositivo adecuado
+        target_device = model.device if use_cuda else "cpu"
+        vision_tower.to(device=target_device)
+
+        image_processor = vision_tower.image_processor
+
+    # Context length
+    context_len = getattr(
+        model.config,
+        "max_sequence_length",
+        getattr(model.config, "max_position_embeddings", 2048)
+    )
+
+    return tokenizer, model, image_processor, context_len
+
+
+def NEWload_pretrained_model(
     model_path,
     model_base,
     model_name,

@@ -1,3 +1,11 @@
+"""
+:Description: Módulo para la extracción y tratamiento de características de imágenes
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
+
 from sources.common.common import logger, processControl, log_
 from sources.dataManager import saveModel, save_clusters, load_clusters, loadModelOpenClip, structureFiles
 from sources.common.utils import buildImageProcess

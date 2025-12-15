@@ -1,3 +1,10 @@
+"""
+:Description: Módulo para la contruccion de variables compartidas globales
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 args = None
 dirs = None
 dirs = {

@@ -1,3 +1,10 @@
+"""
+:Description: Módulo para realizar las evaluaciones con el modelo de lenguaje
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common.common import logger, processControl, log_
 from sources.common.utils import load_images, get_model_name_from_path
 

@@ -1,3 +1,10 @@
+"""
+:Description: Módulo evalua resultados versus gpt2
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from sources.common.common import logger, processControl, log_
 from sources.dataManager import readResults, writeResultsData
 

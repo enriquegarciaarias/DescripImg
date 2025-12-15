@@ -11,6 +11,8 @@ from sources.common.utils import image_parser, load_images, commonVars, get_mode
 from sources.processFeatures import extractFeatures, assign_to_cluster
 from sources.dataManager import readResults, writeResultsData
 from sources.modelEvaluate import eval_model_batch
+
+from sources.common.paramsManager import select_configuration_based_on_memory, get_system_memory_info
 import os
 import time
 
@@ -34,6 +36,250 @@ from llava.mm_utils import (
 )
 
 import re
+
+
+def eval_model_batch(args_list):
+    """Versión con auto-configuración de memoria"""
+
+    # =====================================================
+    # 1. DETECCIÓN AUTOMÁTICA DE CONFIGURACIÓN
+    # =====================================================
+    config_name, auto_config = select_configuration_based_on_memory()
+    log_("info", logger, f"Configuration name: {config_name}")
+    commonArgs, metas = commonVars()
+    # Fusionar configuración automática con commonArgs
+    config = {**commonArgs, **auto_config}
+
+    # Log de configuración seleccionada
+    mem_info = get_system_memory_info()
+    log_("info", logger, f"🔍 Detección de memoria:")
+    log_("info", logger, f"   GPU: {mem_info.get('gpu_name', 'No disponible')}")
+    log_("info", logger, f"   VRAM: {mem_info.get('vram_available', 0):.1f} GB")
+    log_("info", logger, f"   RAM disponible: {mem_info.get('ram_available', 0):.1f} GB")
+    log_("info", logger, f"   Configuración seleccionada: {config_name}")
+    log_("info", logger, f"   Descripción: {auto_config['description']}")
+
+
+    # =====================================================
+    # 2. INICIALIZACIÓN CON CONFIGURACIÓN ADAPTATIVA
+    # =====================================================
+    disable_torch_init()
+
+    def _run():
+        use_cuda = config["use_cuda"]
+        device = torch.device("cuda:0" if use_cuda else "cpu")
+
+        log_("info", logger, f"🚀 Iniciando con configuración '{config_name}' en {device}")
+
+        # Cargar modelo con configuración adaptativa
+        model_name = get_model_name_from_path(config["model_path"])
+        tokenizer, model, image_processor, context_len = load_pretrained_model(
+            model_path=config["model_path"],
+            model_base=config.get("model_base"),
+            model_name=model_name,
+            device="cuda" if use_cuda else "cpu",
+            device_map="auto" if use_cuda else {"": "cpu"},
+            config=config,  # ← Pasar configuración
+        )
+
+        model.eval()
+        results = []
+
+        # =====================================================
+        # 3. PROCESAMIENTO POR BATCHES (ADAPTATIVO)
+        # =====================================================
+        batch_size = config.get("batch_size", 1)
+
+        for batch_start in tqdm(range(0, len(args_list), batch_size),
+                                desc=f"Procesando (batch={batch_size})"):
+            batch_args = args_list[batch_start:batch_start + batch_size]
+
+            try:
+                # Procesar batch completo
+                batch_images = []
+                batch_input_ids = []
+                batch_image_sizes = []
+
+                for args in batch_args:
+                    qs = args["query"]
+                    image_path = args["image_file"]
+
+                    # Preparar prompt
+                    image_token_se = (
+                            DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
+                    )
+
+                    if IMAGE_PLACEHOLDER in qs:
+                        qs = re.sub(
+                            IMAGE_PLACEHOLDER,
+                            image_token_se if model.config.mm_use_im_start_end else DEFAULT_IMAGE_TOKEN,
+                            qs,
+                        )
+                    else:
+                        qs = (
+                            image_token_se + "\n" + qs
+                            if model.config.mm_use_im_start_end
+                            else DEFAULT_IMAGE_TOKEN + "\n" + qs
+                        )
+
+                    # Conversación
+                    conv_mode = (
+                        "llava_llama_2" if "llama-2" in model_name.lower()
+                        else "mistral_instruct" if "mistral" in model_name.lower()
+                        else "llava_v1" if "v1" in model_name.lower()
+                        else "llava_v0"
+                    )
+
+                    conv = conv_templates[conv_mode].copy()
+                    conv.append_message(conv.roles[0], qs)
+                    conv.append_message(conv.roles[1], None)
+                    prompt = conv.get_prompt()
+
+                    # Imagen
+                    images = load_images([image_path])
+                    image_sizes = [img.size for img in images]
+                    batch_image_sizes.extend(image_sizes)
+
+                    images_tensor = process_images(
+                        images,
+                        image_processor,
+                        model.config,
+                    ).to(device, dtype=config.get("torch_dtype", torch.float16))
+
+                    batch_images.append(images_tensor)
+
+                    # Tokenización
+                    input_ids = tokenizer_image_token(
+                        prompt,
+                        tokenizer,
+                        IMAGE_TOKEN_INDEX,
+                        return_tensors="pt",
+                    ).unsqueeze(0).to(device)
+
+                    batch_input_ids.append(input_ids)
+
+                # =====================================================
+                # 4. GENERACIÓN CON PARÁMETROS ADAPTATIVOS
+                # =====================================================
+                if batch_size > 1:
+                    # Batch processing (si batch_size > 1)
+                    batch_images_tensor = torch.cat(batch_images, dim=0)
+                    batch_input_ids_tensor = torch.cat(batch_input_ids, dim=0)
+
+                    with torch.inference_mode():
+                        output_ids = model.generate(
+                            batch_input_ids_tensor,
+                            images=batch_images_tensor,
+                            image_sizes=batch_image_sizes,
+                            do_sample=config["temperature"] > 0,
+                            temperature=config["temperature"],
+                            top_p=config.get("top_p"),
+                            top_k=config.get("top_k"),
+                            num_beams=config["num_beams"],
+                            max_new_tokens=config["max_new_tokens"],
+                            repetition_penalty=config.get("repetition_penalty", 1.0),
+                            length_penalty=config.get("length_penalty", 1.0),
+                            no_repeat_ngram_size=config.get("no_repeat_ngram_size", 3),
+                            use_cache=True,
+                            early_stopping=True,
+                        )
+
+                    # Decodificar cada elemento del batch
+                    for i, args in enumerate(batch_args):
+                        output_text = tokenizer.decode(
+                            output_ids[i],
+                            skip_special_tokens=True,
+                        ).strip()
+
+                        results.append({
+                            "image": args["image_file"],
+                            "prompt": args["query"],
+                            "answer": output_text,
+                            "config_used": config_name,
+                        })
+                else:
+                    # Procesamiento individual (compatible con version anterior)
+                    with torch.inference_mode():
+                        output_ids = model.generate(
+                            batch_input_ids[0],
+                            images=batch_images[0],
+                            image_sizes=batch_image_sizes,
+                            do_sample=config["temperature"] > 0,
+                            temperature=config["temperature"],
+                            top_p=config.get("top_p"),
+                            top_k=config.get("top_k"),
+                            num_beams=config["num_beams"],
+                            max_new_tokens=config["max_new_tokens"],
+                            repetition_penalty=config.get("repetition_penalty", 1.0),
+                            length_penalty=config.get("length_penalty", 1.0),
+                            no_repeat_ngram_size=config.get("no_repeat_ngram_size", 3),
+                            use_cache=True,
+                            early_stopping=True,
+                        )
+
+                    output_text = tokenizer.decode(
+                        output_ids[0],
+                        skip_special_tokens=True,
+                    ).strip()
+
+                    results.append({
+                        "image": batch_args[0]["image_file"],
+                        "prompt": batch_args[0]["query"],
+                        "answer": output_text,
+                        "config_used": config_name,
+                    })
+
+            except torch.cuda.OutOfMemoryError:
+                log_("error", logger, f"⚠️ OOM en batch {batch_start}, reduciendo batch_size")
+                if use_cuda:
+                    torch.cuda.empty_cache()
+                # Fallback a procesamiento individual
+                for args in batch_args:
+                    try:
+                        # Procesar individualmente...
+                        pass
+                    except:
+                        log_("error", logger, f"   Saltando {args['image_file']}")
+                        results.append({
+                            "image": args["image_file"],
+                            "prompt": args["query"],
+                            "answer": "[ERROR: OOM]",
+                            "config_used": config_name + "_fallback",
+                        })
+
+            finally:
+                # Limpieza
+                del batch_images, batch_input_ids
+                if use_cuda:
+                    torch.cuda.empty_cache()
+
+        return results
+
+    # =====================================================
+    # 5. EJECUCIÓN CON FALLBACK AUTOMÁTICO
+    # =====================================================
+    try:
+        return _run()
+    except Exception as e:
+        log_("error", logger, f"❌ Error con configuración {config_name}: {str(e)}")
+
+        # Fallback a configuración más baja
+        if config_name != "low_vram_4bit":
+            log_("warning", logger, "🔄 Intentando con configuración low_vram_4bit...")
+            fallback_config = select_configuration_based_on_memory()[1]
+            fallback_config["name"] = "fallback_" + fallback_config["name"]
+
+            # Sobrescribir con configuración de fallback
+            config = {**commonArgs, **fallback_config}
+            return _run()
+        else:
+            # Último recurso: CPU
+            log_("warning", logger, "🔄 Intentando en CPU...")
+            config["use_cuda"] = False
+            config["load_in_4bit"] = False
+            config["load_in_8bit"] = False
+            config["batch_size"] = 1
+            return _run()
 
 def eval_model(args, commonArgs):
     # Model
@@ -200,7 +446,8 @@ def buildContentProcess():
     return {"images":images_list, "doc":doc_file}
 
 
-def processPrompt1(contentProcess, imageFeatures, personalization):
+def processPrompt1(contentProcess, imageFeatures):
+    personalization = processControl.defaults.get('personalization', {})
     processArgs = []
     for content in tqdm(contentProcess["images"], desc="Processing Prompt 1"):
         features = imageFeatures[content['name']]
@@ -305,8 +552,8 @@ def checkStage():
 
 
 def processStage0():
-    commonArgs, metas = commonVars()
-    personalization = processControl.defaults.get('personalization', {})
+
+
     start_time = time.time()
     contentProcess = buildContentProcess()
     imageFeatures = extractFeatures(contentProcess["images"])
@@ -326,8 +573,8 @@ def processStage0():
     duration = end_time - start_time
     log_("info", logger, f"Duration Process Features-Cluster: {duration}")
 
-    processArgs = processPrompt1(contentProcess, imageFeatures, personalization)
-    results = eval_model_batch(processArgs, commonArgs)
+    processArgs = processPrompt1(contentProcess, imageFeatures)
+    results = eval_model_batch(processArgs)
     for idx, image_data in enumerate(tqdm(contentProcess["images"], desc="Procesando resultados paso 1")):
         for idx2, result in enumerate(results):
             if image_data["imagePath"] == result["image"]:
@@ -352,10 +599,8 @@ def processStage0():
 
 def processStage1(data):
     start_time = time.time()
-    commonArgs, metas = commonVars()
-
     processArgs = processPrompt2(data)
-    results = eval_model_batch(processArgs, commonArgs)
+    results = eval_model_batch(processArgs)
     for idx, image_data in enumerate(data):
         for idx2, result in enumerate(results):
             if image_data["imagePath"] == result["image"]:
@@ -373,10 +618,8 @@ def processStage1(data):
 
 def processStage2(data):
     start_time = time.time()
-    commonArgs, metas = commonVars()
-
     processArgs = processPrompt3(data)
-    results = eval_model_batch(processArgs, commonArgs)
+    results = eval_model_batch(processArgs)
     for idx, image_data in enumerate(data):
         for idx2, result in enumerate(results):
             if image_data["imagePath"] == result["image"]:

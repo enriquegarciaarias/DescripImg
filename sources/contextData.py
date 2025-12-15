@@ -1,3 +1,10 @@
+"""
+:Description: Módulo para la creación del contexto asociado a las imagenes
+:Author:
+    - Ana María García Serrano
+    - Enrique Garcia Arias
+:Organization: UNED
+"""
 from _ast import comprehension
 
 from sources.common.common import logger, processControl, log_
@@ -10,7 +17,6 @@ import re
 
 #nlp = spacy.load("en_core_web_sm")  # Para segmentar párrafos con más precisión Inglés
 nlp = spacy.load("es_core_news_lg") # Para segmentar párrafos con más precisión Castellano
-
 
 
 
