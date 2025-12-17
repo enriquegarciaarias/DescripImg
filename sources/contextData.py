@@ -157,48 +157,6 @@ def buildContextData(documentContextpath, title, top_n=3, threshold=0.5):
 
     return texto_final, keywords
 
-    """
-    MODEL_NAME_EMBEDDING = "sentence-transformers/all-MiniLM-L6-v2"
-    embedding_model = SentenceTransformer(MODEL_NAME_EMBEDDING)
-    embedding_model.to("cuda" if torch.cuda.is_available() else "cpu")
-    # Obtener embeddings de keywords y párrafos
-    keyword_embeddings = embedding_model.encode(keywords, convert_to_tensor=True)
-    paragraph_embeddings = embedding_model.encode(paragraphs, convert_to_tensor=True)
-
-    # Promedio de embeddings de keywords
-    keyword_embedding = torch.max(keyword_embeddings, dim=0, keepdim=True)[0]
-
-    # Calcular similaridad coseno
-    similarities = util.pytorch_cos_sim(keyword_embedding, paragraph_embeddings)[0]
-
-    # Filtrar por umbral de similitud
-    top_indices = similarities.argsort(descending=True)
-    filtered_indices = [i for i in top_indices if similarities[i] >= threshold]
-    a = similarities.min().item()
-    b = similarities.max().item()
-    if len(filtered_indices) == 0 and similarities.max().item() >= 0.3:
-        min_threshold = similarities.max().item() * 0.8  # Baja el umbral al 80% del valor más alto
-        filtered_indices = [i for i in top_indices if similarities[i] >= min_threshold]
-
-    # Seleccionar los top_n párrafos con similitud suficiente
-    relevant_paragraphs = [paragraphs[i] for i in filtered_indices[:top_n]]
-
-    # Construir contexto final
-    contexto = ". ".join(relevant_paragraphs)
-    contexto = re.sub(r'\n+', ' ', contexto).strip()
-    contexto = re.sub(r'\b[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ]+\b', ' ', contexto)  # Reemplaza con espacio en lugar de eliminar
-    contexto = re.sub(r'\s+', ' ', contexto).strip()  # Normaliza los espacios
-
-    # Verificar si contiene la entidad o el sujeto clave
-    check_words = (entity if isinstance(entity, list) else []) + (subject if isinstance(subject, list) else [])
-
-    # Check if at least one word is in contexto
-    if check_words and not any(word in contexto for word in check_words):
-        return None, keywords
-    return contexto, keywords
-    """
-
-
 
 def toponimos(text, prefijos):
     text = re.sub(r'\n+', ' ', text)

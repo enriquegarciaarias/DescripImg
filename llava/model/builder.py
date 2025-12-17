@@ -104,16 +104,17 @@ def load_pretrained_model(
         vision_tower = model.get_vision_tower()
 
         if not vision_tower.is_loaded:
-            # Usar device_map específico si hay CPU offload
-            vision_device_map = device_map
-            if config.get("enable_cpu_offload", False):
-                vision_device_map = {"": "cpu" if not use_cuda else model.device}
+            # 1. CARGAR la torre visual con el device_map correcto
+            vision_tower.load_model(device_map=device_map)
 
-            vision_tower.load_model(device_map=vision_device_map)
-
-        # Mover a dispositivo adecuado
-        target_device = model.device if use_cuda else "cpu"
-        vision_tower.to(device=target_device)
+        # 2. MANEJAR ESPECIALMENTE si está en un "meta device"
+        # Si el primer parámetro está en 'meta', usar to_empty()
+        if hasattr(vision_tower, 'parameters') and next(vision_tower.parameters()).is_meta:
+            print("Vision tower is on meta device. Moving with to_empty()...")
+            vision_tower.to_empty(device=model.device)  # Mueve a GPU y asigna memoria
+        else:
+            # Movimiento normal
+            vision_tower.to(device=model.device)
 
         image_processor = vision_tower.image_processor
 

@@ -452,9 +452,9 @@ def processPrompt1(contentProcess, imageFeatures):
     for content in tqdm(contentProcess["images"], desc="Processing Prompt 1"):
         features = imageFeatures[content['name']]
         assigned_label, closest_cluster_idx = assign_to_cluster(features)
-        contextText, keywords = buildContextData(contentProcess["doc"], content["name"], top_n=5)
+        #contextText, keywords = buildContextData(contentProcess["doc"], content["name"], top_n=5)
         #log_("info", logger, f"Contexto generado: {contextText}")
-        prompt1 = (f"{personalization[assigned_label][0]} representando a '{content['name']}', "
+        prompt1 = (f"Eres un arqueólogo y {personalization[assigned_label][0]} representando a '{content['name']}', "
                    f"Ten en cuenta sin mencionar explícitamente que {personalization[assigned_label][3]} "
                    f"y describe en castellano solo lo visible. Máximo 20 palabras, cíñete a estos dos items:\n"
                    f"Item 1 {personalization[assigned_label][1]}. "
@@ -472,14 +472,9 @@ def processPrompt2(data):
     processArgs = []
     log_("info", logger, f"Start process LLaVA")
     for element in data:
-        patron = r'Item\s*[12]:?'  # Coincide con "Item 1", "Item 1:", "Item 2", "Item 2:"
-        descripInicial = re.sub(patron, '', element['answer']).strip()
-        patron = r'\*\*.*?\*\*'
-        descripInicial = re.sub(patron, '', descripInicial).strip()
-
-        if element['context'] is not None:
-            prompt2 = (f"Este es el contexto con el que vamos a enriquecer una descripción de imagen CONTEXTO: '{element['context']}', "
-                        f"mejora la redacción componiendo un texto contínuo y con sentido global "
+        if element['context']:
+            prompt2 = (f"Eres un arqueólogo en la región de {processControl.args.region} , "
+                        f"mejora la redacción de este CONTEXTO: '{element['context']}', componiendo un texto contínuo y con sentido global "
                         f"Limita las respuestas a 40 palabras como máximo, pero si alcanzas ese límite a mitad de frase, "
                         f"puedes extenderte hasta completarla (hasta el punto final). Utiliza solo la información del CONTEXTO sin añadir nada más. ")
             args = {
@@ -498,14 +493,15 @@ def processPrompt3(data):
         patron = r'\*\*.*?\*\*'
         descripInicial = re.sub(patron, '', descripInicial).strip()
 
-        if element['context'] is not None:
-            prompt3 = (f"Tienes el siguiente CONTEXTO de un yacimiento: '{element['answer2']}', "
-                        f"mejora esta DESCRIPCIÓN: '{descripInicial}'. "
-                        f"Sustituye esta descripción por un texto claro, directo y enlazado, incorporando la información relevante del CONTEXTO. ")
+        if element['context']:
+            prompt3 = (f"Eres un arqueólogo y tienes el siguiente CONTEXTO de un yacimiento: '{element['answer2']}', "
+                        f"mejora esta DESCRIPCIÓN de la imágen: '{descripInicial}'. "
+                        f"Sustituye esta descripción por un texto claro, directo y enlazado, incorporando a la imagen la información relevante del CONTEXTO. ")
         else:
-            prompt3 += (f"Manteniendo el texto de la descripción inicial: '{descripInicial}'. "         
+            prompt3 = (f"Eres un arqueólogo y manteniendo el texto de la descripción inicial: '{descripInicial}'. "         
                         f"Utiliza un máximo de 20 palabras sin cortar frases. "
-                        f"Construye un texto enlazado y no menciones evidencias para un arqueólogo como que es antiguo o deteriorado o es un yacimiento")
+                        f"Construye un texto enlazado orientado a la descripción de una imagen del tipo {element['label']} "
+                       f"y no menciones evidencias para un arqueólogo como que es antiguo o deteriorado o es un yacimiento")
 
 
         args = {

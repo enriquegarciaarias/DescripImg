@@ -60,7 +60,7 @@ def select_configuration_based_on_memory():
     vram_gb = mem_info["vram_available"]
 
     # Configuraciones por nivel de VRAM
-    if vram_gb < 4:
+    if vram_gb < 9:
         return "low_vram_4bit", {
             "name": "low_vram_4bit",
             "description": "VRAM < 4GB - Cuantización 4-bit extrema",
@@ -78,10 +78,10 @@ def select_configuration_based_on_memory():
             "repetition_penalty": 1.0,
             "use_flash_attn": False,
             "enable_cpu_offload": True,
-            "max_memory": {0: "3GB", "cpu": "8GB"}
+            "max_memory": {0: "8GB", "cpu": "8GB"}
         }
 
-    elif vram_gb < 8:
+    elif vram_gb < 9:
         return "medium_vram_4bit", {
             "name": "medium_vram_4bit",
             "description": "VRAM 4-8GB - Cuantización 4-bit optimizada",
@@ -99,7 +99,7 @@ def select_configuration_based_on_memory():
             "repetition_penalty": 1.1,
             "use_flash_attn": False,
             "enable_cpu_offload": False,
-            "max_memory": {0: "7GB"}
+            "max_memory": {0: "8GB"}
         }
 
     elif vram_gb < 12:
