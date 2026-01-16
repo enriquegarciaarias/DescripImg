@@ -89,6 +89,7 @@ def eval_model_batch(args_list):
         # 3. PROCESAMIENTO POR BATCHES (ADAPTATIVO)
         # =====================================================
         batch_size = config.get("batch_size", 1)
+        batch_size = 1
 
         for batch_start in tqdm(range(0, len(args_list), batch_size),
                                 desc=f"Procesando (batch={batch_size})"):
@@ -230,22 +231,7 @@ def eval_model_batch(args_list):
                     })
 
             except torch.cuda.OutOfMemoryError:
-                log_("error", logger, f"⚠️ OOM en batch {batch_start}, reduciendo batch_size")
-                if use_cuda:
-                    torch.cuda.empty_cache()
-                # Fallback a procesamiento individual
-                for args in batch_args:
-                    try:
-                        # Procesar individualmente...
-                        pass
-                    except:
-                        log_("error", logger, f"   Saltando {args['image_file']}")
-                        results.append({
-                            "image": args["image_file"],
-                            "prompt": args["query"],
-                            "answer": "[ERROR: OOM]",
-                            "config_used": config_name + "_fallback",
-                        })
+                raise Exception(f"⚠️ OOM en batch {batch_start}, reduciendo batch_size")
 
             finally:
                 # Limpieza

@@ -50,12 +50,8 @@ def select_configuration_based_on_memory():
 
     if not mem_info["has_cuda"]:
         # Solo CPU - configuración mínima
-        return "cpu_only", {
-            "name": "cpu_only",
-            "description": "Solo CPU disponible",
-            "vram_threshold": 0,
-            "use_cuda": False
-        }
+        config = "cpu_only"
+        return config, processControl.defaults.get('modelConfig', {}).get(config, {})
 
     vram_gb = mem_info["vram_available"]
 
@@ -82,25 +78,8 @@ def select_configuration_based_on_memory():
         }
 
     elif vram_gb < 9:
-        return "medium_vram_4bit", {
-            "name": "medium_vram_4bit",
-            "description": "VRAM 4-8GB - Cuantización 4-bit optimizada",
-            "vram_threshold": 8,
-            "use_cuda": True,
-            "load_in_4bit": True,
-            "load_in_8bit": False,
-            "torch_dtype": torch.float16,
-            "num_beams": 2,
-            "max_new_tokens": 256,
-            "batch_size": 1,
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "top_k": 40,
-            "repetition_penalty": 1.1,
-            "use_flash_attn": False,
-            "enable_cpu_offload": False,
-            "max_memory": {0: "8GB"}
-        }
+        config = "medium_vram_4bit"
+        return config, processControl.defaults.get('modelConfig', {}).get(config, {})
 
     elif vram_gb < 12:
         return "high_vram_8bit", {
@@ -134,7 +113,7 @@ def select_configuration_based_on_memory():
             "torch_dtype": torch.float16,
             "num_beams": 5,
             "max_new_tokens": 512,
-            "batch_size": 4,
+            "batch_size": 1,
             "temperature": 0.7,
             "top_p": 0.95,
             "top_k": 60,
@@ -155,7 +134,7 @@ def select_configuration_based_on_memory():
             "torch_dtype": torch.bfloat16 if hasattr(torch, 'bfloat16') else torch.float16,
             "num_beams": 7,
             "max_new_tokens": 1024,
-            "batch_size": 8,
+            "batch_size": 1,
             "temperature": 0.8,
             "top_p": 0.97,
             "top_k": 100,
