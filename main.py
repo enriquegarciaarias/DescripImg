@@ -59,14 +59,18 @@ def mainProcess():
         featuresFile, imagesLabels = processFeatures()
 
     # APPLY mode: Apply the trained model to new data
-    if processControl.args.proc == "APPLY":
+    elif processControl.args.proc == "APPLY":
         huggingface_login()
         from sources.processLLaVA import processLLaVA
         processLLaVA()
 
-    if processControl.args.proc == "EVAL":
+    elif processControl.args.proc == "EVAL":
         from sources.evaluacion import procesoEvaluacion
         procesoEvaluacion()
+
+    elif processControl.args.proc == "PROCDIR":
+        from sources.processDirectories import procesar_yacimiento
+        procesar_yacimiento()
 
     return True
 
