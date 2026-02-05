@@ -14,7 +14,7 @@ import shutil
 import json
 
 
-def procesar_yacimiento(nomYacimiento):
+def procesar_yacimiento():
     nomYacimiento = processControl.args.yacimiento
     print(f"--- Iniciando proceso para {nomYacimiento} ---")
     filePath = {
@@ -61,7 +61,7 @@ def procesar_yacimiento(nomYacimiento):
                 shutil.move(src_file, target_dir)
 
     # 7) copia el archivo filePath.output.result_3.json al directorio creado
-    shutil.copy(json_path, os.path.join(target_dir, 'result_3.json'))
+    shutil.copy(json_path, os.path.join(target_dir, 'results_3.json'))
 
     # 8) borra todos los archivos *.json del directorio filePath.output
     for archivo in os.listdir(path_output):
